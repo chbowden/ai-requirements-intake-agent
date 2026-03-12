@@ -18,6 +18,12 @@
    - Health: http://127.0.0.1:8000/health
    - Frontend: http://127.0.0.1:8000/app
 
+## Run tests
+1. Install dependencies:
+   pip install -r requirements.txt
+2. Run:
+   pytest
+
 ## Intake API
 - `POST /intake/session/start`
 - `POST /intake/session/{session_id}/answer`
