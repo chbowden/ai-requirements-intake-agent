@@ -28,6 +28,7 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+.tmp/
 
 # Keep output folder tracked, ignore generated files
 output/*
