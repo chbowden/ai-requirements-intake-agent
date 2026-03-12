@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Requirements Intake Agent</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>AI Requirements Intake Agent</h1>
+    <p>Enter an initial business problem statement to begin intake.</p>
+
+    <form id="intake-form">
+      <label for="problem">Business problem</label>
+      <textarea id="problem" name="problem" rows="8" placeholder="Example: Sales teams spend hours manually compiling weekly pipeline reports."></textarea>
+      <button type="submit">Start Intake</button>
+    </form>
+
+    <section id="question-flow" class="hidden">
+      <h2>Follow-up Questions</h2>
+      <p id="progress"></p>
+      <p id="current-question"></p>
+
+      <form id="answer-form">
+        <label for="answer">Your answer</label>
+        <textarea id="answer" name="answer" rows="6" placeholder="Type your answer..."></textarea>
+        <button type="submit">Submit Answer</button>
+      </form>
+
+      <div id="artifact-actions" class="hidden">
+        <button id="generate-artifacts" type="button">Generate Artifacts</button>
+      </div>
+    </section>
+
+    <section id="artifact-output" class="hidden">
+      <h2>Generated Artifacts</h2>
+      <p id="artifact-files"></p>
+      <pre id="artifact-json"></pre>
+    </section>
+
+    <p id="status" aria-live="polite"></p>
+  </main>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
