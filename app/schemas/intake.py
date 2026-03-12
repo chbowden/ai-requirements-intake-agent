@@ -1,12 +1,17 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, StringConstraints
+
+
+NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class StartSessionRequest(BaseModel):
-    initial_problem: str = Field(min_length=1)
+    initial_problem: NonEmptyText
 
 
 class AnswerRequest(BaseModel):
-    answer: str = Field(min_length=1)
+    answer: NonEmptyText
 
 
 class QuestionPayload(BaseModel):
@@ -34,8 +39,13 @@ class RequirementsArtifacts(BaseModel):
     open_questions: list[str]
 
 
+class ArtifactFileResponse(BaseModel):
+    filename: str
+    download_url: str
+
+
 class ArtifactGenerationResponse(BaseModel):
     session_id: str
-    json_file: str
-    markdown_file: str
+    json_artifact: ArtifactFileResponse
+    markdown_artifact: ArtifactFileResponse
     artifacts: RequirementsArtifacts

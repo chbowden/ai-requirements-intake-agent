@@ -45,6 +45,7 @@ def test_intake_session_lifecycle_generates_artifacts(
         return original_write_artifacts(session_id, artifacts, test_output_dir)
 
     monkeypatch.setattr(intake, "write_artifacts", write_artifacts_in_tmp)
+    monkeypatch.setattr(intake, "output_dir", test_output_dir)
 
     start_response = client.post(
         "/intake/session/start",
@@ -94,9 +95,25 @@ def test_intake_session_lifecycle_generates_artifacts(
     artifact_body = artifact_response.json()
     assert artifact_body["session_id"] == session_id
     assert artifact_body["artifacts"]["solution_recommendation"] == "automation"
-    assert Path(artifact_body["json_file"]).exists()
-    assert Path(artifact_body["markdown_file"]).exists()
+    assert artifact_body["json_artifact"]["download_url"] == (
+        f"/intake/session/{session_id}/artifacts/json"
+    )
+    assert artifact_body["markdown_artifact"]["download_url"] == (
+        f"/intake/session/{session_id}/artifacts/markdown"
+    )
+    assert Path(captured_output_dir / artifact_body["json_artifact"]["filename"]).exists()
+    assert Path(
+        captured_output_dir / artifact_body["markdown_artifact"]["filename"]
+    ).exists()
     assert captured_output_dir == test_output_dir
+
+    json_download = client.get(artifact_body["json_artifact"]["download_url"])
+    assert json_download.status_code == 200
+    assert json_download.headers["content-type"].startswith("application/json")
+
+    markdown_download = client.get(artifact_body["markdown_artifact"]["download_url"])
+    assert markdown_download.status_code == 200
+    assert markdown_download.headers["content-type"].startswith("text/markdown")
 
 
 def test_artifact_generation_requires_completed_session() -> None:
@@ -117,3 +134,35 @@ def test_unknown_session_returns_404() -> None:
     response = client.get("/intake/session/does-not-exist")
     assert response.status_code == 404
     assert response.json() == {"detail": "Session not found"}
+
+
+def test_whitespace_only_input_is_rejected() -> None:
+    start_response = client.post(
+        "/intake/session/start",
+        json={"initial_problem": "   "},
+    )
+    assert start_response.status_code == 422
+
+    valid_start = client.post(
+        "/intake/session/start",
+        json={"initial_problem": "Need a better approval process."},
+    )
+    session_id = valid_start.json()["session_id"]
+
+    answer_response = client.post(
+        f"/intake/session/{session_id}/answer",
+        json={"answer": "   "},
+    )
+    assert answer_response.status_code == 422
+
+
+def test_artifact_download_requires_existing_generated_artifact() -> None:
+    start_response = client.post(
+        "/intake/session/start",
+        json={"initial_problem": "Need a cleaner support intake."},
+    )
+    session_id = start_response.json()["session_id"]
+
+    response = client.get(f"/intake/session/{session_id}/artifacts/json")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Artifacts not found"}

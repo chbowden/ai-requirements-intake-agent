@@ -2,8 +2,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from app.schemas.intake import (
+    ArtifactFileResponse,
     ArtifactGenerationResponse,
     AnswerRequest,
     QuestionPayload,
@@ -14,6 +16,7 @@ from app.services.artifact_generator import generate_artifacts, write_artifacts
 from app.services.intake_engine import INTAKE_QUESTIONS, get_next_question
 
 router = APIRouter(prefix="/intake", tags=["intake"])
+output_dir = Path(__file__).resolve().parents[3] / "output"
 
 session_store: dict[str, dict[str, object]] = {}
 
@@ -62,9 +65,6 @@ def get_session(session_id: str) -> SessionProgressResponse:
     response_model=ArtifactGenerationResponse,
 )
 def generate_session_artifacts(session_id: str) -> ArtifactGenerationResponse:
-    if session_id not in session_store:
-        raise HTTPException(status_code=404, detail="Session not found")
-
     progress = _build_response(session_id)
     if not progress.completed:
         raise HTTPException(
@@ -73,19 +73,59 @@ def generate_session_artifacts(session_id: str) -> ArtifactGenerationResponse:
         )
 
     artifacts = generate_artifacts(progress.answers)
-    output_dir = Path(__file__).resolve().parents[3] / "output"
     json_file, markdown_file = write_artifacts(session_id, artifacts, output_dir)
+    session = _get_session_or_404(session_id)
+    session["artifacts"] = {
+        "json": json_file,
+        "markdown": markdown_file,
+    }
+    json_path = Path(json_file)
+    markdown_path = Path(markdown_file)
 
     return ArtifactGenerationResponse(
         session_id=session_id,
-        json_file=json_file,
-        markdown_file=markdown_file,
+        json_artifact=ArtifactFileResponse(
+            filename=json_path.name,
+            download_url=f"/intake/session/{session_id}/artifacts/json",
+        ),
+        markdown_artifact=ArtifactFileResponse(
+            filename=markdown_path.name,
+            download_url=f"/intake/session/{session_id}/artifacts/markdown",
+        ),
         artifacts=artifacts,
     )
 
 
+@router.get("/session/{session_id}/artifacts/{artifact_type}")
+def download_session_artifact(session_id: str, artifact_type: str) -> FileResponse:
+    session = _get_session_or_404(session_id)
+    generated_artifacts = session.get("artifacts")
+    if not isinstance(generated_artifacts, dict):
+        raise HTTPException(status_code=404, detail="Artifacts not found")
+
+    artifact_path_raw = generated_artifacts.get(artifact_type)
+    if not isinstance(artifact_path_raw, str):
+        raise HTTPException(status_code=404, detail="Artifacts not found")
+
+    artifact_path = Path(artifact_path_raw).resolve()
+    try:
+        artifact_path.relative_to(output_dir.resolve())
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Artifacts not found") from exc
+
+    if not artifact_path.exists():
+        raise HTTPException(status_code=404, detail="Artifacts not found")
+
+    media_type = "application/json" if artifact_type == "json" else "text/markdown"
+    return FileResponse(
+        artifact_path,
+        media_type=media_type,
+        filename=artifact_path.name,
+    )
+
+
 def _build_response(session_id: str) -> SessionProgressResponse:
-    session = session_store[session_id]
+    session = _get_session_or_404(session_id)
     answered_count = int(session["answered_count"])
     answers = dict(session["answers"])
     next_question = get_next_question(answered_count)
@@ -101,3 +141,10 @@ def _build_response(session_id: str) -> SessionProgressResponse:
         ),
         answers=answers,
     )
+
+
+def _get_session_or_404(session_id: str) -> dict[str, object]:
+    session = session_store.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session

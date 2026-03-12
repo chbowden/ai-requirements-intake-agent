@@ -11,6 +11,8 @@ const artifactOutput = document.getElementById("artifact-output");
 const artifactFiles = document.getElementById("artifact-files");
 const artifactJson = document.getElementById("artifact-json");
 const status = document.getElementById("status");
+const startButton = form.querySelector('button[type="submit"]');
+const answerButton = answerForm.querySelector('button[type="submit"]');
 
 let currentSessionId = null;
 
@@ -24,27 +26,34 @@ form.addEventListener("submit", async (event) => {
   }
 
   status.textContent = "Starting intake session...";
+  startButton.disabled = true;
 
-  const response = await fetch("/intake/session/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ initial_problem: problem }),
-  });
+  try {
+    const response = await fetch("/intake/session/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initial_problem: problem }),
+    });
 
-  if (!response.ok) {
-    status.textContent = "Could not start intake session. Try again.";
-    return;
+    if (!response.ok) {
+      status.textContent = "Could not start intake session. Try again.";
+      return;
+    }
+
+    const data = await response.json();
+    currentSessionId = data.session_id;
+    questionFlow.classList.remove("hidden");
+    artifactOutput.classList.add("hidden");
+    artifactActions.classList.add("hidden");
+    answerForm.classList.remove("hidden");
+    renderProgress(data);
+    renderQuestion(data);
+    status.textContent = "Session started.";
+  } catch (error) {
+    status.textContent = "Network error while starting intake. Try again.";
+  } finally {
+    startButton.disabled = false;
   }
-
-  const data = await response.json();
-  currentSessionId = data.session_id;
-  questionFlow.classList.remove("hidden");
-  artifactOutput.classList.add("hidden");
-  artifactActions.classList.add("hidden");
-  answerForm.classList.remove("hidden");
-  renderProgress(data);
-  renderQuestion(data);
-  status.textContent = "Session started.";
 });
 
 answerForm.addEventListener("submit", async (event) => {
@@ -62,22 +71,29 @@ answerForm.addEventListener("submit", async (event) => {
   }
 
   status.textContent = "Submitting answer...";
+  answerButton.disabled = true;
 
-  const response = await fetch(`/intake/session/${currentSessionId}/answer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ answer }),
-  });
+  try {
+    const response = await fetch(`/intake/session/${currentSessionId}/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    });
 
-  if (!response.ok) {
-    status.textContent = "Could not submit answer. Try again.";
-    return;
+    if (!response.ok) {
+      status.textContent = "Could not submit answer. Try again.";
+      return;
+    }
+
+    const data = await response.json();
+    answerField.value = "";
+    renderProgress(data);
+    renderQuestion(data);
+  } catch (error) {
+    status.textContent = "Network error while submitting answer. Try again.";
+  } finally {
+    answerButton.disabled = false;
   }
-
-  const data = await response.json();
-  answerField.value = "";
-  renderProgress(data);
-  renderQuestion(data);
 });
 
 function renderProgress(data) {
@@ -106,19 +122,29 @@ generateArtifactsButton.addEventListener("click", async () => {
   }
 
   status.textContent = "Generating artifacts...";
+  generateArtifactsButton.disabled = true;
 
-  const response = await fetch(`/intake/session/${currentSessionId}/artifacts`, {
-    method: "POST",
-  });
+  try {
+    const response = await fetch(`/intake/session/${currentSessionId}/artifacts`, {
+      method: "POST",
+    });
 
-  if (!response.ok) {
-    status.textContent = "Artifact generation failed. Ensure intake is complete.";
-    return;
+    if (!response.ok) {
+      status.textContent = "Artifact generation failed. Ensure intake is complete.";
+      return;
+    }
+
+    const data = await response.json();
+    artifactOutput.classList.remove("hidden");
+    artifactFiles.innerHTML = [
+      `<a href="${data.json_artifact.download_url}">${data.json_artifact.filename}</a>`,
+      `<a href="${data.markdown_artifact.download_url}">${data.markdown_artifact.filename}</a>`,
+    ].join(" | ");
+    artifactJson.textContent = JSON.stringify(data.artifacts, null, 2);
+    status.textContent = "Artifacts generated and ready to download.";
+  } catch (error) {
+    status.textContent = "Network error while generating artifacts. Try again.";
+  } finally {
+    generateArtifactsButton.disabled = false;
   }
-
-  const data = await response.json();
-  artifactOutput.classList.remove("hidden");
-  artifactFiles.textContent = `JSON: ${data.json_file} | Markdown: ${data.markdown_file}`;
-  artifactJson.textContent = JSON.stringify(data.artifacts, null, 2);
-  status.textContent = "Artifacts generated and saved to output folder.";
 });
